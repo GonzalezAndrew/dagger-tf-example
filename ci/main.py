@@ -1,68 +1,85 @@
-"""
-Create a simple pipeline for a deploying a Lambda function.
-"""
-
-import os
+import argparse
 import sys
 
-import anyio
-import dagger
-import graphql
+from pipeline.tf_deploy import tf_deploy
 
 
-def build_image(client: dagger.Client):
-    """ Returns a build environment to be used by a Terraform project.
-    :param client: The dagger Client object.
-    :return: A dagger Container object.
-    :rtype: dagger.Container
-    """
-    # get reference to the local project
-    src = client.host().directory(".")
+def _add_shared_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Dry run the given pipeline. There will be no changes to the infrastructure. "
+            "This is a simple terraform init and plan. The plan will be output to the stdout. "
+        ),
+    )
 
-    # configure the secrets for the build container
-    aws_access_key_id = client.host().env_variable("AWS_ACCESS_KEY_ID").secret()
-    aws_secret_access_key = client.host().env_variable("AWS_SECRET_ACCESS_KEY").secret()
-    aws_session_token = client.host().env_variable("AWS_SESSION_TOKEN").secret()
-    aws_region = os.getenv("AWS_REGION", "us-east-1")
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help=(
+            "When you are running the pipeline on your local machine. "
+            "This is used to pass AWS credentials from your local machine "
+            "to the Dagger build container. You will need to authenticate to "
+            "AWS with sso and set the environment variable `AWS_PROFILE` in order "
+            "to run the pipeline on your local machine properly. "
+        ),
+    )
 
-    # to run docker in docker, we need to connect to the docker socket.
-    docker_host = client.host().unix_socket("/var/run/docker.sock")
-
-    return (
-        client.container()
-        .from_("ghcr.io/gonzalezandrew/dagger-tf-example:main")
-        .with_env_variable("AWS_REGION", aws_region)
-        .with_secret_variable("AWS_ACCESS_KEY_ID", aws_access_key_id)
-        .with_secret_variable("AWS_SECRET_ACCESS_KEY", aws_secret_access_key)
-        .with_secret_variable("AWS_SESSION_TOKEN", aws_session_token)
-        .with_unix_socket("/var/run/docker.sock", docker_host)
-        .with_mounted_directory("/src", src)
-        .with_workdir("/src")
+    parser.add_argument(
+        "--profile",
+        help=(
+            "Passing a AWS profile to the pipeline. "
+            "This is usually only used when you're running dagger on your local machine "
+            "and you do not wish to set the `AWS_PROFILE` environment variable. "
+        ),
     )
 
 
-def init(image: dagger.Container):
-    pass
+def main(argv=None) -> int:
+    argv = argv if argv is not None else sys.argv[1:]
 
-def plan(image: dagger.Container):
-    pass
+    parser = argparse.ArgumentParser(
+        prog="dagger",
+        description="A command line tool to run dagger pipelines.",
+    )
 
-def apply(image: dagger.Container):
-    pass
+    subparser = parser.add_subparsers(dest="command")
 
-async def main():
-    """main"""
-    # initialize dagger client
-    async with dagger.Connection(dagger.Config(log_output=sys.stderr)) as client:
+    tf_deploy_parser = subparser.add_parser(
+        "tf-deploy", help="Deploys the given Terraform config."
+    )
+    tf_deploy_parser.add_argument(
+        "--workdir",
+        help="The working directory where the Terraform configuration files will be located.",
+    )
+    tf_deploy_parser.add_argument(
+        "--output-commands",
+        action="store_true",
+        help=("Output all possible predefined terraform commands."),
+    )
 
-        # lets grab the build environment
-        build = build_image(client=client)
-        
-        await build.exec(["terraform", "-version"]).stdout()
+    _add_shared_option(tf_deploy_parser)
+
+    help = subparser.add_parser("help", help="Show the help for a specific command.")
+    help.add_argument("help_cmd", nargs="?", help="Command to show help for.")
+
+    if len(argv) == 0:
+        parser.print_help()
+
+    args = parser.parse_args(argv)
+    if args.command == "help" and args.help_cmd:
+        parser.parse_args([args.help_cmd, "--help"])
+        return 0
+    elif args.command == "help":
+        parser.parse_args(["--help"])
+        return 0
+
+    if args.command == "tf-deploy":
+        tf_deploy(args)
+    else:
+        raise NotImplementedError(f"The command {args.command} is not implemented!")
+
 
 if __name__ == "__main__":
-    try:
-        anyio.run(main)
-    except graphql.GraphQLError as e:
-        print(e.message, file=sys.stderr)
-        sys.exit(1)
+    raise SystemExit(main())

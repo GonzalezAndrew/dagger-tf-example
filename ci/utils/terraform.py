@@ -45,7 +45,7 @@ def configure_build_env(client: dagger.Client, tf_workdir: str) -> dagger.Contai
     )
 
 
-def terraform_commands():
+def terraform_commands(environment: str):
     """Configure and return a map of Terraform commands.
     :return: A map of Terraform commands
     :rtype: dict[str, list[str]]
@@ -56,13 +56,15 @@ def terraform_commands():
     global_commands = [
         "-input=false",
         "-refresh=true",
+        "-var-file=environment/globals/inputs.tfvars",
+        f"-var-file=environment/{environment}/inputs.tfvars",
     ]
 
     # TODO: plan-txt command is UGLY, make it cute
     terraform_commands = {
         "plan": ["terraform", "plan"],
         "apply": ["terraform", "apply", "-auto-approve"],
-        "init": ["terraform", "init"],
+        "init": ["terraform", "init", f"-backend-config=deploy/{environment}/backend.hcl"],
         "destroy": ["terraform", "apply", "-destroy", "-auto-approve"],
         "plan-destroy": ["terraform", "plan", "-destroy"],
         "update": ["terraform", "get", "-update=true"],

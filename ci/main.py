@@ -53,6 +53,12 @@ def main(argv=None) -> int:
         "--workdir",
         help="The working directory where the Terraform configuration files will be located.",
     )
+    tf_deploy_parser.add_argument("--environment", default="staging", help=(
+            "The environment we are deploying to. "
+            "This also tells the pipeline which inputs.tfvars and backend.hcl we are using for the deployment. "
+        )
+    )
+    
     tf_deploy_parser.add_argument(
         "--output-commands",
         action="store_true",

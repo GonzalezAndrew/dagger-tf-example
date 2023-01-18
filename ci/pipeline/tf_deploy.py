@@ -26,7 +26,7 @@ def __output(data: dict) -> None:
     console.print(table)
 
 
-async def run_pipeline(tf_workdir: str, dry_run: bool):
+async def run_pipeline(tf_workdir: str, dry_run: bool, environment: str):
     """Run the pipeline"""
     async with dagger.Connection(
         dagger.Config(log_output=sys.stderr, timeout=60000, execute_timeout=3000)
@@ -34,7 +34,7 @@ async def run_pipeline(tf_workdir: str, dry_run: bool):
 
         # lets get a map of predefined terraform commands to help us
         # easily run terraform commands
-        commands = terraform_commands()
+        commands = terraform_commands(environment=environment)
 
         # the dagger build container obj
         builder = configure_build_env(client, tf_workdir)
@@ -55,7 +55,7 @@ def tf_deploy(args: argparse.Namespace):
     """Run a full Terraform workflow"""
     # output the predefined tf commands
     if args.output_commands:
-        commands = terraform_commands()
+        commands = terraform_commands(args.environment)
         __output(commands)
         return 0
 
@@ -70,6 +70,6 @@ def tf_deploy(args: argparse.Namespace):
         get_aws_creds(args.profile)
 
     try:
-        asyncer.runnify(run_pipeline)(tf_workdir=workdir, dry_run=dry_run)
+        asyncer.runnify(run_pipeline)(tf_workdir=workdir, dry_run=dry_run, environment=args.environment)
     except Exception as e:
         raise e

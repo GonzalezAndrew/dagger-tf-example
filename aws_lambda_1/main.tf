@@ -37,7 +37,7 @@ module "lambda_s3_trigger" {
   source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
   version = "3.3.0"
 
-  bucket = "bucket-oh-bucket"
+  bucket = "bucket-oh-bucket-${var.environment}"
   eventbridge = true
 
   lambda_notifications = {
@@ -73,7 +73,7 @@ module "docker_image" {
   })
 
   # docker tag
-  image_tag   = "2.3"
+  image_tag   = var.image_tag
 
   # the path where the dockerfile and lambda is located
   source_path = "${path.cwd}/context"
